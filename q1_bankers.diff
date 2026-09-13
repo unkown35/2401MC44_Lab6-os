@@ -1,0 +1,139 @@
+diff --git a/user/bankers.c b/user/bankers.c
+new file mode 100644
+index 0000000..8303f10
+--- /dev/null
++++ b/user/bankers.c
+@@ -0,0 +1,133 @@
++#include "kernel/types.h"
++#include "user/user.h"
++
++#define NUM_PROCESSES 5
++#define NUM_RESOURCES 3
++
++int allocation[NUM_PROCESSES][NUM_RESOURCES] = {
++    {0, 1, 0}, {2, 0, 0}, {3, 0, 2}, {2, 1, 1}, {0, 0, 2}
++};
++
++int max[NUM_PROCESSES][NUM_RESOURCES] = {
++    {7, 5, 3}, {3, 2, 2}, {9, 0, 2}, {2, 2, 2}, {4, 3, 3}
++};
++
++int available[NUM_RESOURCES] = {3, 3, 2};
++int need[NUM_PROCESSES][NUM_RESOURCES];
++
++void calculate_need() {
++    for (int i = 0; i < NUM_PROCESSES; i++)
++        for (int j = 0; j < NUM_RESOURCES; j++)
++            need[i][j] = max[i][j] - allocation[i][j];
++}
++
++int is_safe() {
++    int work[NUM_RESOURCES], finish[NUM_PROCESSES] = {0};
++    int safe_seq[NUM_PROCESSES], count = 0;
++    
++    for (int j = 0; j < NUM_RESOURCES; j++) work[j] = available[j];
++    
++    int found;
++    do {
++        found = 0;
++        for (int i = 0; i < NUM_PROCESSES; i++) {
++            if (finish[i] == 0) {
++                int can_alloc = 1;
++                for (int j = 0; j < NUM_RESOURCES; j++)
++                    if (need[i][j] > work[j]) { can_alloc = 0; break; }
++                
++                if (can_alloc) {
++                    for (int j = 0; j < NUM_RESOURCES; j++) work[j] += allocation[i][j];
++                    safe_seq[count++] = i;
++                    finish[i] = 1;
++                    found = 1;
++                }
++            }
++        }
++    } while (found);
++    
++    if (count == NUM_PROCESSES) {
++        printf("System is in SAFE state.\nSafe sequence: ");
++        for (int i = 0; i < NUM_PROCESSES; i++) {
++            printf("P%d", safe_seq[i]);
++            if (i < NUM_PROCESSES - 1) printf(" -> ");
++        }
++        printf("\n");
++        return 1;
++    } else {
++        printf("System is in UNSAFE state!\n");
++        return 0;
++    }
++}
++
++int request_resources(int pid, int request[NUM_RESOURCES]) {
++    printf("\n--- Process P%d requests: [%d, %d, %d] ---\n", 
++           pid, request[0], request[1], request[2]);
++    
++    for (int j = 0; j < NUM_RESOURCES; j++) {
++        if (request[j] > need[pid][j]) {
++            printf("ERROR: Request exceeds Need! Denied.\n");
++            return 0;
++        }
++        if (request[j] > available[j]) {
++            printf("ERROR: Request exceeds Available! Process must wait.\n");
++            return 0;
++        }
++    }
++    
++    for (int j = 0; j < NUM_RESOURCES; j++) {
++        available[j] -= request[j];
++        allocation[pid][j] += request[j];
++        need[pid][j] -= request[j];
++    }
++    
++    if (is_safe()) {
++        printf("Request GRANTED.\n");
++        return 1;
++    } else {
++        printf("Request DENIED - would lead to unsafe state. Rolling back...\n");
++        for (int j = 0; j < NUM_RESOURCES; j++) {
++            available[j] += request[j];
++            allocation[pid][j] -= request[j];
++            need[pid][j] += request[j];
++        }
++        return 0;
++    }
++}
++
++void print_state() {
++    printf("\nAllocation\tMax\t\tNeed\t\tAvailable\n");
++    for (int i = 0; i < NUM_PROCESSES; i++) {
++        printf("[%d,%d,%d]\t[%d,%d,%d]\t[%d,%d,%d]\t[%d,%d,%d]\n",
++               allocation[i][0], allocation[i][1], allocation[i][2],
++               max[i][0], max[i][1], max[i][2],
++               need[i][0], need[i][1], need[i][2],
++               available[0], available[1], available[2]);
++    }
++    printf("\n");
++}
++
++int main() {
++    printf("========================================\n");
++    printf("Banker's Algorithm Simulation\n");
++    printf("========================================\n");
++    
++    calculate_need();
++    print_state();
++    
++    printf("=== Safety Algorithm ===\n");
++    is_safe();
++    
++    printf("\n=== TEST 1: Safe Request ===\n");
++    int req1[NUM_RESOURCES] = {1, 0, 2};
++    request_resources(1, req1);
++    print_state();
++    
++    printf("\n=== TEST 2: Unsafe Request ===\n");
++    int req2[NUM_RESOURCES] = {3, 3, 0};
++    request_resources(0, req2);
++    print_state();
++    
++    printf("========================================\n");
++    exit(0);
++}
